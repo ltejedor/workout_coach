@@ -50,7 +50,7 @@ export default function Home() {
       const now = Date.now();
 
       // Throttle: ignore if < X ms since last check
-      if (now - lastEventTime < 300) {
+      if (now - lastEventTime < 3000) {
         return;
       }
       lastEventTime = now;
