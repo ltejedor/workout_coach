@@ -76,7 +76,7 @@ export default function Home() {
       const totalMovement = deltaX + deltaY + deltaZ;
 
       // Maybe bump this threshold higher so small jitters don't trigger movement
-      const newIsMoving = totalMovement > 3;
+      const newIsMoving = totalMovement > 25;
 
       handleMotionStateChange(newIsMoving);
 
