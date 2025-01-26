@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/trpc/react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { SpeechControl } from "@/components/SpeechControl";
+import toast from "react-hot-toast";
 
 interface Message {
   content: string;
@@ -13,11 +14,6 @@ interface Message {
 
 interface FormInputs {
   message: string;
-}
-
-// Define the extended DeviceMotionEvent interface
-interface DeviceMotionEventWithPermission extends DeviceMotionEvent {
-  requestPermission?: () => Promise<"granted" | "denied" | "default">;
 }
 
 export default function Home() {
@@ -43,77 +39,111 @@ export default function Home() {
     },
   });
 
-  useEffect(() => {
-    // Request permission for device motion/orientation
-    const requestMotionPermission = async () => {
-      try {
-        if (typeof window !== 'undefined' && 
-            window.DeviceMotionEvent && 
-            (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission) {
-          const response = await (DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> })
-            .requestPermission();
-          if (response === 'granted') {
-            setupMotionListeners();
-          }
-        } else {
-          setupMotionListeners();
+  const addMotionMessage = useCallback((content: string) => {
+    const now = Date.now();
+    const messageDebounceTime = 5000; // Minimum time between motion messages in ms
+    if (now - lastMotionMessage > messageDebounceTime) {
+      setMessages(prev => [...prev, { content, sender: "assistant" }]);
+      setLastMotionMessage(now);
+    }
+  }, [lastMotionMessage]);
+
+  const setupMotionListeners = useCallback(() => {
+    let lastX: number | undefined;
+    let lastY: number | undefined;
+    let lastZ: number | undefined;
+    let moveCounter = 0;
+
+    const handleDeviceMotion = (event: DeviceMotionEvent) => {
+      let acc = event.acceleration;
+      // If acceleration is not available, try accelerationIncludingGravity
+      if (!acc || !acc.hasOwnProperty('x')) {
+        acc = event.accelerationIncludingGravity;
+      }
+
+      // Sometimes there's no valid data, so bail early
+      if (!acc || acc.x === null) return;
+
+      // Only process if x, y, z are not null and > 1
+      if (acc.x !== null && acc.y !== null && acc.z !== null && 
+          Math.abs(acc.x) >= 1 && Math.abs(acc.y) >= 1 && Math.abs(acc.z) >= 1) {
+        if (lastX === undefined || lastY === undefined || lastZ === undefined) {
+          lastX = acc.x;
+          lastY = acc.y;
+          lastZ = acc.z;
+          return;
         }
-      } catch (error) {
-        console.error('Error requesting motion permission:', error);
-        setupMotionListeners();
+
+        // Now TypeScript knows these values are defined
+        const deltaX = Math.abs(acc.x - lastX);
+        const deltaY = Math.abs(acc.y - lastY);
+        const deltaZ = Math.abs(acc.z - lastZ);
+
+        if (deltaX + deltaY + deltaZ > 3) {
+          moveCounter++;
+        } else {
+          moveCounter = Math.max(0, moveCounter - 1);
+        }
+
+        if (moveCounter > 2) {
+          addMotionMessage('Detected significant device movement!');
+          moveCounter = 0; // reset
+        }
+
+        // Update last positions
+        lastX = acc.x;
+        lastY = acc.y;
+        lastZ = acc.z;
       }
     };
 
-    function setupMotionListeners() {
-      const motionThreshold = 5; // Acceleration threshold in m/s²
-      const orientationThreshold = 15; // Rotation threshold in degrees
-      const messageDebounceTime = 5000; // Minimum time between motion messages in ms
+    window.addEventListener('devicemotion', handleDeviceMotion, false);
 
-      const handleDeviceMotion = (event: DeviceMotionEvent) => {
-        const acceleration = event.acceleration;
-        console.log("not moving")
-        if (!acceleration) return;
+    return () => {
+      window.removeEventListener('devicemotion', handleDeviceMotion);
+    };
+  }, [addMotionMessage]);
 
-        const totalAcceleration = Math.sqrt(
-          (acceleration.x ?? 0) ** 2 +
-          (acceleration.y ?? 0) ** 2 +
-          (acceleration.z ?? 0) ** 2
-        );
-
-        if (totalAcceleration > motionThreshold) {
-          console.log("moving")
-          addMotionMessage('Detected significant device movement!');
+  useEffect(() => {
+    // Check if we need to request permission (iOS 13+)
+    if (
+      typeof window.DeviceMotionEvent !== 'undefined' &&
+      typeof window.DeviceMotionEvent.requestPermission === 'function'
+    ) {
+      const button = document.createElement('button');
+      button.className = 'fixed bottom-4 right-4 rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600';
+      button.textContent = 'Enable Motion';
+      
+      const handleClick = async () => {
+        try {
+          const response = await window.DeviceMotionEvent.requestPermission?.();
+          if (response === 'granted') {
+            toast.success('Motion detection enabled!');
+            setupMotionListeners();
+            button.remove();
+          } else {
+            toast.error('Motion permission denied');
+          }
+        } catch (err) {
+          toast.error('Error requesting motion permission');
+          console.error('Error requesting motion permission:', err);
         }
       };
 
-      const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
-        const beta = event.beta ?? 0; // X-axis rotation
-        const gamma = event.gamma ?? 0; // Y-axis rotation
+      button.addEventListener('click', () => {
+        void handleClick();
+      });
 
-        if (Math.abs(beta) > orientationThreshold || Math.abs(gamma) > orientationThreshold) {
-          addMotionMessage('Detected device rotation!');
-        }
-      };
-
-      function addMotionMessage(content: string) {
-        const now = Date.now();
-        if (now - lastMotionMessage > messageDebounceTime) {
-          setMessages(prev => [...prev, { content, sender: "assistant" }]);
-          setLastMotionMessage(now);
-        }
-      }
-
-      window.addEventListener('devicemotion', handleDeviceMotion);
-      window.addEventListener('deviceorientation', handleDeviceOrientation);
+      document.body.appendChild(button);
 
       return () => {
-        window.removeEventListener('devicemotion', handleDeviceMotion);
-        window.removeEventListener('deviceorientation', handleDeviceOrientation);
+        button.remove();
       };
+    } else {
+      // No permission needed, setup listeners directly
+      return setupMotionListeners();
     }
-
-    void requestMotionPermission();
-  }, [lastMotionMessage]);
+  }, [setupMotionListeners]);
 
   const onSubmit = (data: FormInputs) => {
     setMessages((prev) => [...prev, { content: data.message, sender: "user" }]);
