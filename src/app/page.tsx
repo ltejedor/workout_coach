@@ -1,51 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm } from "react-hook-form";
 import { api } from "@/trpc/react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { SpeechControl } from "@/components/SpeechControl";
-import toast from "react-hot-toast";
-
-interface Message {
-  content: string;
-  sender: "user" | "assistant";
-}
-
-interface FormInputs {
-  message: string;
-}
+import { EnableMotionButton } from "@/components/EnableMotionButton";
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [latestMessage, setLatestMessage] = useState<string | null>(null);
   const [isMoving, setIsMoving] = useState(false);
   const [lastMovementTime, setLastMovementTime] = useState(Date.now());
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<FormInputs>();
-
-  const sendMessageMutation = api.sendMessage.useMutation({
-    onSuccess: (data) => {
-      setMessages((prev) => [
-        ...prev,
-        { content: data.reply, sender: "assistant" },
-      ]);
-
-      void import("@/lib/speech/speak").then(({ speak }) => {
-        void speak(data.reply);
-      });
-    },
-  });
+  const [showMotionButton, setShowMotionButton] = useState(false);
 
   const sendMotivationMutation = api.sendMessage.useMutation({
     onSuccess: (data) => {
-      setMessages((prev) => [
-        ...prev,
-        { content: data.reply, sender: "assistant" },
-      ]);
+      setLatestMessage(data.reply);
 
       void import("@/lib/speech/speak").then(({ speak }) => {
         void speak(data.reply);
@@ -53,7 +22,6 @@ export default function Home() {
     },
   });
 
-  // Function to handle motion state changes
   const handleMotionStateChange = useCallback((newIsMoving: boolean) => {
     if (newIsMoving !== isMoving) {
       setIsMoving(newIsMoving);
@@ -115,7 +83,6 @@ export default function Home() {
     };
   }, [handleMotionStateChange]);
 
-  // Set up periodic motivation check for sustained states
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -140,83 +107,23 @@ export default function Home() {
       typeof window.DeviceMotionEvent !== 'undefined' &&
       typeof window.DeviceMotionEvent.requestPermission === 'function'
     ) {
-      const button = document.createElement('button');
-      button.className = 'fixed bottom-4 right-4 rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600';
-      button.textContent = 'Enable Motion';
-
-      const handleClick = async () => {
-        try {
-          const response = await window.DeviceMotionEvent.requestPermission?.();
-          if (response === 'granted') {
-            toast.success('Motion detection enabled!');
-            setupMotionListeners();
-            button.remove();
-          } else {
-            toast.error('Motion permission denied');
-          }
-        } catch (err) {
-          toast.error('Error requesting motion permission');
-          console.error('Error requesting motion permission:', err);
-        }
-      };
-
-      button.addEventListener('click', () => {
-        void handleClick();
-      });
-
-      document.body.appendChild(button);
-
-      return () => {
-        button.remove();
-      };
+      setShowMotionButton(true);
     } else {
-      return setupMotionListeners();
+      setupMotionListeners();
     }
   }, [setupMotionListeners]);
 
-  const onSubmit = (data: FormInputs) => {
-    setMessages((prev) => [...prev, { content: data.message, sender: "user" }]);
-    void sendMessageMutation.mutateAsync({ message: data.message }).then(() => {
-      reset();
-    });
-  };
-
   return (
-    <main className="container mx-auto max-w-2xl p-4">
-      <div className="mb-4 rounded-lg bg-white p-4 shadow-lg">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Chat with Dobby Unleashed</h1>
-          <SpeechControl />
-        </div>
-
-        <div className="mb-4 h-[60vh] overflow-y-auto rounded-lg bg-gray-50 p-4">
-          {messages.map((message, index) => (
-            <ChatMessage
-              key={index}
-              message={message.content}
-              sender={message.sender}
-            />
-          ))}
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex gap-2">
-          <input
-            {...register("message", { required: "Message is required" })}
-            className="flex-1 rounded-lg border border-gray-300 p-2"
-            placeholder="Type your message..."
-            disabled={sendMessageMutation.isPending}
-          />
-          <button
-            type="submit"
-            disabled={sendMessageMutation.isPending}
-            className="rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:bg-blue-300"
-          >
-            {sendMessageMutation.isPending ? "Sending..." : "Send"}
-          </button>
-        </form>
-        {errors.message && (
-          <p className="mt-1 text-sm text-red-500">{errors.message.message}</p>
+    <main className="min-h-screen">
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 flex justify-center space-x-4">
+        <SpeechControl />
+        {showMotionButton && (
+          <EnableMotionButton onPermissionGranted={setupMotionListeners} />
         )}
+      </div>
+
+      <div className="h-screen flex items-center justify-center p-4">
+        {latestMessage && <ChatMessage message={latestMessage} sender="assistant" />}
       </div>
     </main>
   );
