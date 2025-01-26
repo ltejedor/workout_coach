@@ -14,6 +14,11 @@ interface FormInputs {
   message: string;
 }
 
+// Define the extended DeviceMotionEvent interface
+interface DeviceMotionEventWithPermission extends DeviceMotionEvent {
+  requestPermission?: () => Promise<"granted" | "denied" | "default">;
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [lastMotionMessage, setLastMotionMessage] = useState(0);
@@ -39,20 +44,24 @@ export default function Home() {
 
   useEffect(() => {
     // Request permission for device motion/orientation
-    if (typeof DeviceMotionEvent !== 'undefined' &&
-        // @ts-ignore - TypeScript doesn't know about requestPermission
-        typeof DeviceMotionEvent.requestPermission === 'function') {
-      // @ts-ignore
-      DeviceMotionEvent.requestPermission()
-        .then((response: string) => {
+    const requestMotionPermission = async () => {
+      try {
+        if (typeof window !== 'undefined' && 
+            window.DeviceMotionEvent && 
+            (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission) {
+          const response = await (DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> })
+            .requestPermission();
           if (response === 'granted') {
             setupMotionListeners();
           }
-        })
-        .catch(console.error);
-    } else {
-      setupMotionListeners();
-    }
+        } else {
+          setupMotionListeners();
+        }
+      } catch (error) {
+        console.error('Error requesting motion permission:', error);
+        setupMotionListeners();
+      }
+    };
 
     function setupMotionListeners() {
       const motionThreshold = 5; // Acceleration threshold in m/s²
@@ -101,6 +110,8 @@ export default function Home() {
         window.removeEventListener('deviceorientation', handleDeviceOrientation);
       };
     }
+
+    void requestMotionPermission();
   }, [lastMotionMessage]);
 
   const onSubmit = (data: FormInputs) => {
