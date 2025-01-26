@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/trpc/react";
 import { ChatMessage } from "@/components/ChatMessage";
+import { SpeechControl } from "@/components/SpeechControl";
 
 interface Message {
   content: string;
@@ -124,7 +125,10 @@ export default function Home() {
   return (
     <main className="container mx-auto max-w-2xl p-4">
       <div className="mb-4 rounded-lg bg-white p-4 shadow-lg">
-        <h1 className="mb-4 text-2xl font-bold">Chat with Dobby Unleashed</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Chat with Dobby Unleashed</h1>
+          <SpeechControl />
+        </div>
 
         <div className="mb-4 h-[60vh] overflow-y-auto rounded-lg bg-gray-50 p-4">
           {messages.map((message, index) => (
