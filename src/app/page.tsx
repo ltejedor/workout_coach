@@ -59,11 +59,11 @@ export default function Home() {
       setIsMoving(newIsMoving);
       if (newIsMoving) {
         void sendMotivationMutation.mutateAsync({
-          message: "Say something very enthusiastic and encouraging about me starting to move!"
+          message: "You're my coach. Say something very enthusiastic and encouraging about me starting to run!"
         });
       } else {
         void sendMotivationMutation.mutateAsync({
-          message: "Say something stern about me stopping my workout and tell me to get moving again!"
+          message: "You're my coach. Say something extremely mean about me stopping my workout and tell me to get moving again!"
         });
       }
     }
@@ -99,7 +99,7 @@ export default function Home() {
 
         const totalMovement = deltaX + deltaY + deltaZ;
         const newIsMoving = totalMovement > 2;
-        
+
         handleMotionStateChange(newIsMoving);
 
         lastX = acc.x;
@@ -123,11 +123,11 @@ export default function Home() {
 
       if (isMoving && timeSinceLastMovement <= 10000) {
         void sendMotivationMutation.mutateAsync({
-          message: "Say something supportive about my continued workout effort."
+          message: "You're my workout coach. Say something supportive about the fact that I'm runnning."
         });
       } else if (!isMoving && timeSinceLastMovement > 10000) {
         void sendMotivationMutation.mutateAsync({
-          message: "Say something motivational to get me to start moving again."
+          message: "You're my workout coach. Say something horrifyingly mean to get me to start moving again."
         });
       }
     }, 10000);
