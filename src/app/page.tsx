@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/trpc/react";
 import { ChatMessage } from "@/components/ChatMessage";
@@ -16,6 +16,7 @@ interface FormInputs {
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [lastMotionMessage, setLastMotionMessage] = useState(0);
   const {
     register,
     handleSubmit,
@@ -29,12 +30,78 @@ export default function Home() {
         ...prev,
         { content: data.reply, sender: "assistant" },
       ]);
-      
+
       void import("@/lib/speech/speak").then(({ speak }) => {
         void speak(data.reply);
       });
     },
   });
+
+  useEffect(() => {
+    // Request permission for device motion/orientation
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        // @ts-ignore - TypeScript doesn't know about requestPermission
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+      // @ts-ignore
+      DeviceMotionEvent.requestPermission()
+        .then((response: string) => {
+          if (response === 'granted') {
+            setupMotionListeners();
+          }
+        })
+        .catch(console.error);
+    } else {
+      setupMotionListeners();
+    }
+
+    function setupMotionListeners() {
+      const motionThreshold = 5; // Acceleration threshold in m/s²
+      const orientationThreshold = 15; // Rotation threshold in degrees
+      const messageDebounceTime = 5000; // Minimum time between motion messages in ms
+
+      const handleDeviceMotion = (event: DeviceMotionEvent) => {
+        const acceleration = event.acceleration;
+        console.log("not moving")
+        if (!acceleration) return;
+
+        const totalAcceleration = Math.sqrt(
+          (acceleration.x ?? 0) ** 2 +
+          (acceleration.y ?? 0) ** 2 +
+          (acceleration.z ?? 0) ** 2
+        );
+
+        if (totalAcceleration > motionThreshold) {
+          console.log("moving")
+          addMotionMessage('Detected significant device movement!');
+        }
+      };
+
+      const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+        const beta = event.beta ?? 0; // X-axis rotation
+        const gamma = event.gamma ?? 0; // Y-axis rotation
+
+        if (Math.abs(beta) > orientationThreshold || Math.abs(gamma) > orientationThreshold) {
+          addMotionMessage('Detected device rotation!');
+        }
+      };
+
+      function addMotionMessage(content: string) {
+        const now = Date.now();
+        if (now - lastMotionMessage > messageDebounceTime) {
+          setMessages(prev => [...prev, { content, sender: "assistant" }]);
+          setLastMotionMessage(now);
+        }
+      }
+
+      window.addEventListener('devicemotion', handleDeviceMotion);
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+
+      return () => {
+        window.removeEventListener('devicemotion', handleDeviceMotion);
+        window.removeEventListener('deviceorientation', handleDeviceOrientation);
+      };
+    }
+  }, [lastMotionMessage]);
 
   const onSubmit = (data: FormInputs) => {
     setMessages((prev) => [...prev, { content: data.message, sender: "user" }]);
@@ -47,7 +114,7 @@ export default function Home() {
     <main className="container mx-auto max-w-2xl p-4">
       <div className="mb-4 rounded-lg bg-white p-4 shadow-lg">
         <h1 className="mb-4 text-2xl font-bold">Chat with Dobby Unleashed</h1>
-        
+
         <div className="mb-4 h-[60vh] overflow-y-auto rounded-lg bg-gray-50 p-4">
           {messages.map((message, index) => (
             <ChatMessage
