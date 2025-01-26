@@ -44,44 +44,53 @@ export default function Home() {
     let lastX: number | undefined;
     let lastY: number | undefined;
     let lastZ: number | undefined;
+    let lastEventTime = 0; // Track last time we processed an event
 
     const handleDeviceMotion = (event: DeviceMotionEvent) => {
+      const now = Date.now();
+
+      // Throttle: ignore if < X ms since last check
+      if (now - lastEventTime < 300) {
+        return;
+      }
+      lastEventTime = now;
+
       let acc = event.acceleration;
       if (!acc || !acc.hasOwnProperty('x')) {
         acc = event.accelerationIncludingGravity;
       }
+      if (!acc || acc.x == null || acc.y == null || acc.z == null) {
+        return;
+      }
 
-      if (!acc || acc.x === null) return;
-
-      if (acc.x !== null && acc.y !== null && acc.z !== null) {
-        if (lastX === undefined || lastY === undefined || lastZ === undefined) {
-          lastX = acc.x;
-          lastY = acc.y;
-          lastZ = acc.z;
-          return;
-        }
-
-        const deltaX = Math.abs(acc.x - lastX);
-        const deltaY = Math.abs(acc.y - lastY);
-        const deltaZ = Math.abs(acc.z - lastZ);
-
-        const totalMovement = deltaX + deltaY + deltaZ;
-        const newIsMoving = totalMovement > 2;
-
-        handleMotionStateChange(newIsMoving);
-
+      if (lastX === undefined || lastY === undefined || lastZ === undefined) {
         lastX = acc.x;
         lastY = acc.y;
         lastZ = acc.z;
+        return;
       }
+
+      const deltaX = Math.abs(acc.x - lastX);
+      const deltaY = Math.abs(acc.y - lastY);
+      const deltaZ = Math.abs(acc.z - lastZ);
+      const totalMovement = deltaX + deltaY + deltaZ;
+
+      // Maybe bump this threshold higher so small jitters don't trigger movement
+      const newIsMoving = totalMovement > 3;
+
+      handleMotionStateChange(newIsMoving);
+
+      lastX = acc.x;
+      lastY = acc.y;
+      lastZ = acc.z;
     };
 
-    window.addEventListener('devicemotion', handleDeviceMotion, false);
-
+    window.addEventListener('devicemotion', handleDeviceMotion);
     return () => {
       window.removeEventListener('devicemotion', handleDeviceMotion);
     };
   }, [handleMotionStateChange]);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
