@@ -19,6 +19,7 @@ interface FormInputs {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [lastMotionMessage, setLastMotionMessage] = useState(0);
+  const [lastMovementTime, setLastMovementTime] = useState(Date.now());
   const {
     register,
     handleSubmit,
@@ -39,12 +40,26 @@ export default function Home() {
     },
   });
 
+  const sendMotivationMutation = api.sendMessage.useMutation({
+    onSuccess: (data) => {
+      setMessages((prev) => [
+        ...prev,
+        { content: data.reply, sender: "assistant" },
+      ]);
+
+      void import("@/lib/speech/speak").then(({ speak }) => {
+        void speak(data.reply);
+      });
+    },
+  });
+
   const addMotionMessage = useCallback((content: string) => {
     const now = Date.now();
     const messageDebounceTime = 5000; // Minimum time between motion messages in ms
     if (now - lastMotionMessage > messageDebounceTime) {
       setMessages(prev => [...prev, { content, sender: "assistant" }]);
       setLastMotionMessage(now);
+      setLastMovementTime(now); // Update last movement time when motion is detected
     }
   }, [lastMotionMessage]);
 
@@ -65,7 +80,7 @@ export default function Home() {
       if (!acc || acc.x === null) return;
 
       // Only process if x, y, z are not null and > 1
-      if (acc.x !== null && acc.y !== null && acc.z !== null && 
+      if (acc.x !== null && acc.y !== null && acc.z !== null &&
           Math.abs(acc.x) >= 1 && Math.abs(acc.y) >= 1 && Math.abs(acc.z) >= 1) {
         if (lastX === undefined || lastY === undefined || lastZ === undefined) {
           lastX = acc.x;
@@ -104,6 +119,28 @@ export default function Home() {
     };
   }, [addMotionMessage]);
 
+  // Set up periodic motivation check
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastMovement = now - lastMovementTime;
+
+      if (timeSinceLastMovement <= 10000) {
+        // If movement detected in last 10 seconds, send supportive message
+        void sendMotivationMutation.mutateAsync({
+          message: "Say something supportive about my workout."
+        });
+      } else {
+        // If no movement detected, send motivational message
+        void sendMotivationMutation.mutateAsync({
+          message: "Say something mean to get me to start running again and keep me motivated."
+        });
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [lastMovementTime, sendMotivationMutation]);
+
   useEffect(() => {
     // Check if we need to request permission (iOS 13+)
     if (
@@ -113,7 +150,7 @@ export default function Home() {
       const button = document.createElement('button');
       button.className = 'fixed bottom-4 right-4 rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600';
       button.textContent = 'Enable Motion';
-      
+
       const handleClick = async () => {
         try {
           const response = await window.DeviceMotionEvent.requestPermission?.();

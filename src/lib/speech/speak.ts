@@ -23,7 +23,7 @@ export function speak(text: string) {
   const setVoice = () => {
     const voices = window.speechSynthesis.getVoices();
     const googleUKMale = voices.find(
-      voice => voice.name === 'Zarvox' && voice.lang === 'en-US'
+      voice => voice.name === 'Ralph' && voice.lang === 'en-US'
     );
     if (googleUKMale) {
       utterance.voice = googleUKMale;
