@@ -18,7 +18,7 @@ interface FormInputs {
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [lastMotionMessage, setLastMotionMessage] = useState(0);
+  const [isMoving, setIsMoving] = useState(false);
   const [lastMovementTime, setLastMovementTime] = useState(Date.now());
   const {
     register,
@@ -53,33 +53,38 @@ export default function Home() {
     },
   });
 
-  const addMotionMessage = useCallback((content: string) => {
-    const now = Date.now();
-    const messageDebounceTime = 5000; // Minimum time between motion messages in ms
-    if (now - lastMotionMessage > messageDebounceTime) {
-      setMessages(prev => [...prev, { content, sender: "assistant" }]);
-      setLastMotionMessage(now);
-      setLastMovementTime(now); // Update last movement time when motion is detected
+  // Function to handle motion state changes
+  const handleMotionStateChange = useCallback((newIsMoving: boolean) => {
+    if (newIsMoving !== isMoving) {
+      setIsMoving(newIsMoving);
+      if (newIsMoving) {
+        void sendMotivationMutation.mutateAsync({
+          message: "Say something very enthusiastic and encouraging about me starting to move!"
+        });
+      } else {
+        void sendMotivationMutation.mutateAsync({
+          message: "Say something stern about me stopping my workout and tell me to get moving again!"
+        });
+      }
     }
-  }, [lastMotionMessage]);
+    if (newIsMoving) {
+      setLastMovementTime(Date.now());
+    }
+  }, [isMoving, sendMotivationMutation]);
 
   const setupMotionListeners = useCallback(() => {
     let lastX: number | undefined;
     let lastY: number | undefined;
     let lastZ: number | undefined;
-    let isInMotion = false;
 
     const handleDeviceMotion = (event: DeviceMotionEvent) => {
       let acc = event.acceleration;
-      // If acceleration is not available, try accelerationIncludingGravity
       if (!acc || !acc.hasOwnProperty('x')) {
         acc = event.accelerationIncludingGravity;
       }
 
-      // Sometimes there's no valid data, so bail early
       if (!acc || acc.x === null) return;
 
-      // Only process if x, y, z are not null
       if (acc.x !== null && acc.y !== null && acc.z !== null) {
         if (lastX === undefined || lastY === undefined || lastZ === undefined) {
           lastX = acc.x;
@@ -88,24 +93,15 @@ export default function Home() {
           return;
         }
 
-        // Now TypeScript knows these values are defined
         const deltaX = Math.abs(acc.x - lastX);
         const deltaY = Math.abs(acc.y - lastY);
         const deltaZ = Math.abs(acc.z - lastZ);
 
-        // Lower threshold for more immediate detection
         const totalMovement = deltaX + deltaY + deltaZ;
-        const wasInMotion = isInMotion;
-        isInMotion = totalMovement > 2; // Lower threshold for quicker detection
+        const newIsMoving = totalMovement > 2;
+        
+        handleMotionStateChange(newIsMoving);
 
-        // Only send message when state changes (starting or stopping motion)
-        if (isInMotion !== wasInMotion) {
-          if (isInMotion) {
-            addMotionMessage('Detected significant device movement!');
-          }
-        }
-
-        // Update last positions
         lastX = acc.x;
         lastY = acc.y;
         lastZ = acc.z;
@@ -117,32 +113,29 @@ export default function Home() {
     return () => {
       window.removeEventListener('devicemotion', handleDeviceMotion);
     };
-  }, [addMotionMessage]);
+  }, [handleMotionStateChange]);
 
-  // Set up periodic motivation check
+  // Set up periodic motivation check for sustained states
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       const timeSinceLastMovement = now - lastMovementTime;
 
-      if (timeSinceLastMovement <= 10000) {
-        // If movement detected in last 10 seconds, send supportive message
+      if (isMoving && timeSinceLastMovement <= 10000) {
         void sendMotivationMutation.mutateAsync({
-          message: "Say something supportive about my workout."
+          message: "Say something supportive about my continued workout effort."
         });
-      } else {
-        // If no movement detected, send motivational message
+      } else if (!isMoving && timeSinceLastMovement > 10000) {
         void sendMotivationMutation.mutateAsync({
-          message: "Say something mean to get me to start running again and keep me motivated."
+          message: "Say something motivational to get me to start moving again."
         });
       }
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [lastMovementTime, sendMotivationMutation]);
+  }, [lastMovementTime, isMoving, sendMotivationMutation]);
 
   useEffect(() => {
-    // Check if we need to request permission (iOS 13+)
     if (
       typeof window.DeviceMotionEvent !== 'undefined' &&
       typeof window.DeviceMotionEvent.requestPermission === 'function'
@@ -177,7 +170,6 @@ export default function Home() {
         button.remove();
       };
     } else {
-      // No permission needed, setup listeners directly
       return setupMotionListeners();
     }
   }, [setupMotionListeners]);

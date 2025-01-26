@@ -7,46 +7,19 @@ export function setSpeechEnabled(enabled: boolean) {
 }
 
 export function speak(text: string) {
-  // Don't speak if speech is disabled
-  if (!isSpeechEnabled) {
-    return;
-  }
+  if (!isSpeechEnabled) return;
 
-  // Check if speech synthesis is available
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     return;
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
 
-  // Function to set voice
-  const setVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    const googleUKMale = voices.find(
-      voice => voice.name === 'Daniel' && voice.lang === 'en-US'
-    );
-    if (googleUKMale) {
-      utterance.voice = googleUKMale;
-    } else {
-      // Fallback to any English voice if Google UK Male is not available
-      const englishVoice = voices.find(voice => voice.lang.startsWith('en-'));
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-      }
-    }
-  };
+  // No assignment to `utterance.voice` here.
+  // If iOS Safari honors the user’s default voice from Settings,
+  // it *could* use Daniel (Enhanced).
 
-  // Try to set voice immediately
-  setVoice();
-
-  // If voices aren't loaded yet, wait for them
-  if (window.speechSynthesis.onvoiceschanged !== undefined) {
-    window.speechSynthesis.onvoiceschanged = setVoice;
-  }
-
-  // Cancel any ongoing speech
+  // Cancel any ongoing speech before speaking
   window.speechSynthesis.cancel();
-
-  // Speak the text
   window.speechSynthesis.speak(utterance);
 }
