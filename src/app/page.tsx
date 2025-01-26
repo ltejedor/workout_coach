@@ -67,7 +67,7 @@ export default function Home() {
     let lastX: number | undefined;
     let lastY: number | undefined;
     let lastZ: number | undefined;
-    let moveCounter = 0;
+    let isInMotion = false;
 
     const handleDeviceMotion = (event: DeviceMotionEvent) => {
       let acc = event.acceleration;
@@ -79,9 +79,8 @@ export default function Home() {
       // Sometimes there's no valid data, so bail early
       if (!acc || acc.x === null) return;
 
-      // Only process if x, y, z are not null and > 1
-      if (acc.x !== null && acc.y !== null && acc.z !== null &&
-          Math.abs(acc.x) >= 1 && Math.abs(acc.y) >= 1 && Math.abs(acc.z) >= 1) {
+      // Only process if x, y, z are not null
+      if (acc.x !== null && acc.y !== null && acc.z !== null) {
         if (lastX === undefined || lastY === undefined || lastZ === undefined) {
           lastX = acc.x;
           lastY = acc.y;
@@ -94,15 +93,16 @@ export default function Home() {
         const deltaY = Math.abs(acc.y - lastY);
         const deltaZ = Math.abs(acc.z - lastZ);
 
-        if (deltaX + deltaY + deltaZ > 3) {
-          moveCounter++;
-        } else {
-          moveCounter = Math.max(0, moveCounter - 1);
-        }
+        // Lower threshold for more immediate detection
+        const totalMovement = deltaX + deltaY + deltaZ;
+        const wasInMotion = isInMotion;
+        isInMotion = totalMovement > 2; // Lower threshold for quicker detection
 
-        if (moveCounter > 2) {
-          addMotionMessage('Detected significant device movement!');
-          moveCounter = 0; // reset
+        // Only send message when state changes (starting or stopping motion)
+        if (isInMotion !== wasInMotion) {
+          if (isInMotion) {
+            addMotionMessage('Detected significant device movement!');
+          }
         }
 
         // Update last positions
