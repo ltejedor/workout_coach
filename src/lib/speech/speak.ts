@@ -7,12 +7,12 @@ export function speak(text: string) {
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
-  
+
   // Function to set voice
   const setVoice = () => {
     const voices = window.speechSynthesis.getVoices();
     const googleUKMale = voices.find(
-      voice => voice.name === 'Google UK English Male' && voice.lang === 'en-GB'
+      voice => voice.name === 'Zarvox' && voice.lang === 'en-US'
     );
     if (googleUKMale) {
       utterance.voice = googleUKMale;
