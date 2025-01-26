@@ -3,6 +3,14 @@ import { TRPCError } from "@trpc/server";
 import { procedure } from "@/server/api/trpc";
 import { env } from "@/env";
 
+interface FireworksResponse {
+  choices: Array<{
+    message: {
+      content: string;
+    };
+  }>;
+}
+
 export const sendMessage = procedure
   .input(
     z.object({
@@ -39,9 +47,18 @@ export const sendMessage = procedure
         });
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as FireworksResponse;
+      const reply = data.choices[0]?.message?.content;
+      
+      if (!reply) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Invalid response format from AI",
+        });
+      }
+
       return {
-        reply: data.choices[0]?.message?.content ?? "No response from AI",
+        reply,
       };
     } catch (error) {
       throw new TRPCError({

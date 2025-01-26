@@ -30,17 +30,17 @@ export default function Home() {
         { content: data.reply, sender: "assistant" },
       ]);
       
-      // Import and use the speak function
-      import("@/lib/speech/speak").then(({ speak }) => {
-        speak(data.reply);
+      void import("@/lib/speech/speak").then(({ speak }) => {
+        void speak(data.reply);
       });
     },
   });
 
-  const onSubmit = async (data: FormInputs) => {
+  const onSubmit = (data: FormInputs) => {
     setMessages((prev) => [...prev, { content: data.message, sender: "user" }]);
-    await sendMessageMutation.mutateAsync({ message: data.message });
-    reset();
+    void sendMessageMutation.mutateAsync({ message: data.message }).then(() => {
+      reset();
+    });
   };
 
   return (
